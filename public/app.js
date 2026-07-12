@@ -73,11 +73,12 @@ function render(section) {
 function renderOverview() {
   const k = DATA.kpis;
   $("#content").innerHTML = `
+    <p class="section-hint small">Overview shows <b>purchased / billable spend</b>: paid seats are counted from the quantity your vendors bill for, even when some seats are still unassigned. Compare this with the <b>Users</b> page, which totals only licenses currently assigned to real users.</p>
     <div class="kpi-grid">
       <div class="kpi">
-        <div class="label">Monthly spend</div>
+        <div class="label">Monthly purchased spend</div>
         <div class="value">${money(k.totalMonthlySpend)}</div>
-        <div class="sub muted">${k.paidPurchasedSeats} purchased paid licenses</div>
+        <div class="sub muted">${k.paidPurchasedSeats} purchased paid licenses, including unassigned paid seats</div>
       </div>
       <div class="kpi accent-red">
         <div class="label">Wasted / month</div>
@@ -154,7 +155,7 @@ function renderUsers() {
   const sort = { key: "wasted", dir: -1 };
 
   $("#content").innerHTML = `
-    <p class="section-hint small">${allUsers.length} users hold licenses totalling <b>${money2(totalCost)}/mo</b>. Users are merged only when the email address matches <b>exactly</b>; otherwise records stay separate. Click a row to see each user's licenses. Click a column header to sort.</p>
+    <p class="section-hint small">${allUsers.length} users hold licenses totalling <b>${money2(totalCost)}/mo</b> in <b>assigned-user spend</b>. Unassigned paid seats are excluded here, so this total can be lower than the <b>Overview</b> page's purchased spend. Users are merged only when the email address matches <b>exactly</b>; otherwise records stay separate. Click a row to see each user's licenses. Click a column header to sort.</p>
     <div class="panel">
       <div style="margin-bottom:12px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap">
         <input id="userSearch" placeholder="Search by name or email…" style="width:280px;padding:8px 12px;border:1px solid var(--border,#2a2f3a);border-radius:8px;background:transparent;color:inherit">
@@ -538,10 +539,10 @@ async function renderLicenses() {
     { key: "purchased", label: "Purchased", num: true, get: (l) => billableSeats(l) },
     { key: "assigned", label: "Assigned", num: true, get: (l) => assignedSeats(l) },
     { key: "available", label: "Available", num: true, get: (l) => availableSeats(l) },
-    { key: "renewal", label: "Renewal / expiration", get: (l) => l.renewalDate || "" },
-    { key: "default", label: "Fetched default", num: true, get: (l) => l.defaultPrice },
-    { key: "price", label: "Price / license ($/mo)", num: true, get: (l) => l.price },
-    { key: "monthly", label: "Monthly cost", num: true, get: (l) => l.price * billableSeats(l) },
+    { key: "renewal", label: "Expire", get: (l) => l.renewalDate || "" },
+    { key: "default", label: "Default", num: true, get: (l) => l.defaultPrice },
+    { key: "price", label: "Price/mo", num: true, get: (l) => l.price },
+    { key: "monthly", label: "Cost/mo", num: true, get: (l) => l.price * billableSeats(l) },
     { key: "__actions", label: "", num: true, sortable: false, get: () => 0 },
   ];
   const licSort = { key: "monthly", dir: -1 };
@@ -568,8 +569,8 @@ async function renderLicenses() {
               <td>${formatDate(l.renewalDate)}</td>
               <td class="num muted">${money2(l.defaultPrice)}</td>
               <td class="num">${money2(l.price)}</td>
-              <td class="num">${money2(l.price * billableSeats(l))}</td>
-              <td class="num">
+              <td class="num license-cost-value">${money2(l.price * billableSeats(l))}</td>
+              <td class="num license-actions-cell">
                 <div class="row-actions">
                   <button class="btn edit-lic" data-sku="${encodeURIComponent(l.skuId)}" style="padding:5px 11px">Edit</button>
                   ${l.manual ? `<button class="btn danger del-manual" data-id="${l.skuId}" style="padding:5px 11px">Delete</button>` : ""}

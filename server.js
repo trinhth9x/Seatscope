@@ -194,6 +194,12 @@ function ovOf(v) {
   if (v != null && v !== "") return { price: Number(v) };
   return {};
 }
+
+function normalizeFetchedLicenseName(sku, name) {
+  if (sku?.manual || sku?.serviceId !== "m365") return String(name || "").trim();
+  return String(name || "").replace(/_/g, " ").trim();
+}
+
 function applyOverrides(raw, overrides) {
   return {
     ...raw,
@@ -203,7 +209,7 @@ function applyOverrides(raw, overrides) {
       return {
         ...s,
         unitCostMonthly: o.price != null && o.price !== "" ? Number(o.price) : s.unitCostMonthly,
-        name: o.name && String(o.name).trim() ? String(o.name).trim() : s.name,
+        name: o.name && String(o.name).trim() ? normalizeFetchedLicenseName(s, o.name) : s.name,
       };
     }),
   };
@@ -268,10 +274,11 @@ app.get("/api/licenses", async (_req, res) => {
       const seatsAssigned = seatsHeld[s.id] || 0;
       const seatsPurchased = s.seatsTotal ?? null;
       const billableSeats = seatsPurchased ?? seatsAssigned;
+      const effectiveName = o.name && String(o.name).trim() ? normalizeFetchedLicenseName(s, o.name) : s.name;
       return {
         skuId: s.id,
         service: svc[s.serviceId] || s.serviceId,
-        name: o.name || s.name, // effective (edited) name
+        name: effectiveName, // effective (edited) name
         defaultName: s.name, // fetched name
         seatsTotal: seatsPurchased,
         seatsPurchased,

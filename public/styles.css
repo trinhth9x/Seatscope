@@ -94,7 +94,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .pill.active { background: #e7f8f1; color: #067a55; }
 .pill.na { background: #eef2f7; color: #64748b; }
 .table-scroll { overflow-x: auto; }
-.license-table { min-width: 1280px; }
+.license-table { min-width: 1220px; }
 .avatar { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--brand-soft); color: var(--brand); font-weight: 700; font-size: 11px; margin-right: 9px; }
 .person { display: flex; align-items: center; }
 .loading { padding: 60px; text-align: center; color: var(--muted); }
@@ -123,5 +123,7 @@ input.price-input:focus { outline: none; border-color: var(--brand); }
 .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 22px; }
 .btn.primary { background: var(--brand); color: #fff; border-color: var(--brand); }
 .btn.danger { color: var(--red); }
+.license-cost-value { min-width: 96px; font-variant-numeric: tabular-nums; font-weight: 700; }
+.license-actions-cell { width: 1%; white-space: nowrap; }
 .row-actions { display: flex; gap: 6px; justify-content: flex-end; }
 @media (max-width: 1000px) { .kpi-grid { grid-template-columns: repeat(2,1fr); } .grid-2 { grid-template-columns: 1fr; } }
