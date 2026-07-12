@@ -484,12 +484,19 @@ app.delete("/api/connectors/instances/:id", (req, res) => {
 
 // --- scheduled refresh (self-host long runs) ---
 // Connector data is cached in memory and otherwise only re-fetched on restart,
-// a connector change, or ?refresh=1. This re-runs the connectors periodically so
-// a month-long deployment doesn't show stale data. Default: weekly.
-// Set REFRESH_INTERVAL_HOURS=0 to disable.
-const REFRESH_HOURS = process.env.REFRESH_INTERVAL_HOURS != null
+// a connector change, or ?refresh=1. A refresh only re-calls the vendor APIs
+// (network I/O, no heavy CPU), so running it once a day is cheap.
+//
+// Default: daily at local 00:00.
+//  - REFRESH_DAILY_HOUR (0-23): change the hour of the daily run (default 0).
+//  - REFRESH_INTERVAL_HOURS: use a fixed interval instead (e.g. 168 = weekly).
+//  - Set REFRESH_INTERVAL_HOURS=0 (or REFRESH_DAILY_HOUR=off) to disable.
+const INTERVAL_HOURS = process.env.REFRESH_INTERVAL_HOURS != null
   ? Number(process.env.REFRESH_INTERVAL_HOURS)
-  : 168; // one week
+  : null;
+const DAILY_HOUR = process.env.REFRESH_DAILY_HOUR != null
+  ? Number(process.env.REFRESH_DAILY_HOUR)
+  : 0;
 
 async function scheduledRefresh() {
   rawCache = null;
@@ -502,13 +509,34 @@ async function scheduledRefresh() {
   }
 }
 
-if (Number.isFinite(REFRESH_HOURS) && REFRESH_HOURS > 0) {
-  setInterval(scheduledRefresh, REFRESH_HOURS * 60 * 60 * 1000).unref();
+let refreshLabel;
+if (INTERVAL_HOURS != null) {
+  // fixed-interval mode (opt-in); 0 disables
+  if (Number.isFinite(INTERVAL_HOURS) && INTERVAL_HOURS > 0) {
+    setInterval(scheduledRefresh, INTERVAL_HOURS * 60 * 60 * 1000).unref();
+    refreshLabel = `every ${INTERVAL_HOURS}h`;
+  } else {
+    refreshLabel = "disabled";
+  }
+} else if (Number.isInteger(DAILY_HOUR) && DAILY_HOUR >= 0 && DAILY_HOUR <= 23) {
+  // daily at local DAILY_HOUR:00 — self-rescheduling to stay aligned across DST
+  const scheduleNext = () => {
+    const now = new Date();
+    const next = new Date(now);
+    next.setHours(DAILY_HOUR, 0, 0, 0);
+    if (next <= now) next.setDate(next.getDate() + 1);
+    setTimeout(async () => {
+      await scheduledRefresh();
+      scheduleNext();
+    }, next - now).unref();
+  };
+  scheduleNext();
+  refreshLabel = `daily at ${String(DAILY_HOUR).padStart(2, "0")}:00 (local)`;
+} else {
+  refreshLabel = "disabled";
 }
 
 app.listen(PORT, () => {
   console.log(`\n  Seatscope:  http://localhost:${PORT}   (data: ${currentSource()})`);
-  console.log(REFRESH_HOURS > 0
-    ? `  auto-refresh: every ${REFRESH_HOURS}h\n`
-    : `  auto-refresh: disabled\n`);
+  console.log(`  auto-refresh: ${refreshLabel}\n`);
 });

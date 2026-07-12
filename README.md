@@ -104,9 +104,11 @@ Optional environment variables:
 
 - `PORT` — HTTP port (default `4000`).
 - `DATA_SOURCE` — `mock` (default) or `live`. You can also toggle this from the UI.
-- `REFRESH_INTERVAL_HOURS` — how often the server re-runs the connectors for fresh
-  data (default `168`, i.e. weekly). Set to `0` to disable auto-refresh. The **↻ Refresh**
-  button in the UI always fetches live data on demand regardless of this setting.
+- `REFRESH_DAILY_HOUR` — local hour (0-23) for the daily auto-refresh (default `0`,
+  i.e. midnight). A refresh only re-calls the vendor APIs (no heavy CPU), so daily is cheap.
+- `REFRESH_INTERVAL_HOURS` — optional: use a fixed interval instead of the daily run
+  (e.g. `168` = weekly). Set to `0` to disable auto-refresh entirely. The **↻ Refresh**
+  button in the UI always fetches live data on demand regardless of these settings.
 
 ## Architecture
 
