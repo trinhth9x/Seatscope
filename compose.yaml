@@ -1,0 +1,19 @@
+services:
+  seatscope:
+    build: .
+    # Or use a prebuilt image instead of build:
+    # image: ghcr.io/trinhth9x/seatscope:latest
+    container_name: seatscope
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    volumes:
+      # Persists connector config, manual licenses and price overrides.
+      - seatscope-data:/app/data
+    environment:
+      - PORT=4000
+      # Credentials are entered in the web UI (Connectors page) and stored in
+      # the mounted volume — no secrets needed here.
+
+volumes:
+  seatscope-data:

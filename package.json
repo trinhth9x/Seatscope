@@ -1,0 +1,16 @@
+{
+  "name": "seatscope",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Open-source portal to see SaaS license usage, cost, waste and inactive users across GitHub, Microsoft 365, Azure DevOps, Jira and more",
+  "license": "MIT",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}

@@ -1,0 +1,9 @@
+node_modules/
+
+# Secrets & local env (keep .env.example only)
+.env
+.env.*
+!.env.example
+
+# Runtime state incl. connector tokens — never commit
+data/*.json

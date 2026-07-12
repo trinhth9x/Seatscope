@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Seatscope</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script src="vendor/chart.umd.min.js"></script>
+    <script src="vendor/xlsx.full.min.js"></script>
+  </head>
+  <body>
+    <div class="app">
+      <!-- Sidebar -->
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-mark">◆</div>
+          <div class="brand-text">Seat<span>scope</span></div>
+        </div>
+        <nav class="nav">
+          <a class="nav-item active" data-section="overview"><span class="ic">▦</span> Overview</a>
+          <a class="nav-item" data-section="users"><span class="ic">☰</span> Users</a>
+          <a class="nav-item" data-section="waste"><span class="ic">⚠</span> Wasted licenses</a>
+          <a class="nav-item" data-section="inactive"><span class="ic">◔</span> Inactive users</a>
+          <a class="nav-item" data-section="renewals"><span class="ic">↻</span> Renewals</a>
+          <a class="nav-item" data-section="licenses"><span class="ic">$</span> License types</a>
+          <a class="nav-item" data-section="connectors"><span class="ic">⚟</span> Connectors</a>
+        </nav>
+        <div class="sidebar-foot">
+          <div class="src-badge" id="srcBadge">…</div>
+          <div class="muted small" id="genAt"></div>
+        </div>
+      </aside>
+
+      <!-- Main -->
+      <main class="main">
+        <header class="topbar">
+          <div>
+            <h1 id="pageTitle">Overview</h1>
+            <p class="muted small" id="pageSub">License usage, cost & waste across all connected services</p>
+          </div>
+          <button class="btn" id="refreshBtn">↻ Refresh</button>
+        </header>
+
+        <div id="content"><div class="loading">Loading…</div></div>
+      </main>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>
