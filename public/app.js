@@ -29,8 +29,8 @@ const excelToolbar = (btnId) =>
 const PAGE = {
   overview: { title: "Overview", sub: "License usage, cost & waste across all connected services" },
   users: { title: "Users", sub: "Every user with the licenses they hold and their total monthly license cost" },
-  waste: { title: "Wasted licenses", sub: "Assigned seats that are idle or never used — safe to reclaim" },
-  inactive: { title: "Inactive users", sub: "People with no active license usage — candidates for offboarding review" },
+  waste: { title: "Wasted licenses", sub: "Assigned seats that appear idle or never used — review before reclaiming a license" },
+  inactive: { title: "Inactive users", sub: "People with no detected license usage — review before removing a user or license" },
   renewals: { title: "Renewals", sub: "Subscriptions renewing in the next 45 days" },
   licenses: { title: "License types", sub: "Prices are fetched automatically — override any to recompute all waste & savings" },
   connectors: { title: "Connectors", sub: "Connect GitHub & Microsoft 365 — credentials are read-only and stay on your server" },

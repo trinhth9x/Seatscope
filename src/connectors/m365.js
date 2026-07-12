@@ -14,6 +14,7 @@
 
 const AUTH = (t) => `https://login.microsoftonline.com/${t}/oauth2/v2.0/token`;
 const GRAPH = "https://graph.microsoft.com/v1.0";
+const GRAPH_BETA = "https://graph.microsoft.com/beta";
 
 // Common friendly names + default monthly USD prices. Adjust to your contract.
 const SKU = {
@@ -78,6 +79,29 @@ async function graphAll(path, tok) {
   return out;
 }
 
+// Fallback last sign-in from the raw sign-in logs, by userId (reliable — the
+// aggregated signInActivity property is missing/lagging for some users, and a
+// userPrincipalName filter does NOT always match). Best-effort: returns null on
+// any error (e.g. tenant without Entra ID P1, throttling, or no logs in range).
+async function lastSignInFromLogs(userId, tok) {
+  const filter = `userId eq '${userId}' and (signInEventTypes/any(t: t eq 'interactiveUser') or signInEventTypes/any(t: t eq 'nonInteractiveUser'))`;
+  const url = `${GRAPH_BETA}/auditLogs/signIns?$filter=${encodeURIComponent(filter)}&$top=1&$orderby=${encodeURIComponent("createdDateTime desc")}`;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${tok}` } });
+  if (!res.ok) return null;
+  const j = await res.json();
+  return j.value?.[0]?.createdDateTime || null;
+}
+
+// run an async fn over items with a bounded concurrency pool
+async function pooled(items, size, fn) {
+  let i = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(size, items.length) }, async () => {
+      while (i < items.length) { const idx = i++; await fn(items[idx]); }
+    })
+  );
+}
+
 export async function collect(cfg = {}) {
   const conf = {
     tenantId: cfg.tenantId ?? process.env.MS_TENANT_ID,
@@ -114,6 +138,7 @@ export async function collect(cfg = {}) {
     tok
   );
 
+  const fallbackNeeded = []; // users licensed but missing aggregated signInActivity
   for (const u of users) {
     if (!u.assignedLicenses || u.assignedLicenses.length === 0) continue;
     // A license is "in use" if there is ANY sign-in: interactive OR non-interactive
@@ -131,15 +156,28 @@ export async function collect(cfg = {}) {
       department: u.department || "",
       tenant: conf.tenantId,
     });
+    const userAssignments = [];
     for (const lic of u.assignedLicenses) {
       if (!skuBySkuId[lic.skuId]) continue; // ignore SKUs not in subscribedSkus
-      assignments.push({
+      const a = {
         personId: `m365:${u.id}`,
         skuId: lic.skuId,
         assignedDate: null,
         lastActivity: last ? last.slice(0, 10) : null, // null => never signed in
-      });
+      };
+      assignments.push(a);
+      userAssignments.push(a);
     }
+    // Aggregated signInActivity is missing/lagging for some users; fall back to
+    // the raw sign-in logs so real activity isn't shown as "Never".
+    if (!last && userAssignments.length) fallbackNeeded.push({ id: u.id, userAssignments });
+  }
+
+  if (fallbackNeeded.length) {
+    await pooled(fallbackNeeded, 5, async ({ id, userAssignments }) => {
+      const ts = await lastSignInFromLogs(id, tok);
+      if (ts) for (const a of userAssignments) a.lastActivity = ts.slice(0, 10);
+    });
   }
 
   return { services, skus, people, assignments };

@@ -129,6 +129,38 @@ Optional environment variables:
 - **`server.js`** loads the connector chosen by `DATA_SOURCE`, caches the result, and serves `/api/dashboard`.
 - **`public/`** is the professional dashboard (Overview, Wasted licenses, Inactive users, Renewals).
 
+## How waste is calculated
+
+Waste is computed **per assignment** — i.e. per `(user × license/SKU)` pair — in
+`src/aggregate.js`:
+
+- Each assignment has a `lastActivity` date supplied by its connector.
+- `STALE_DAYS = 45`. An assignment's status is:
+  - `never` — assigned but never used (`lastActivity` is null)
+  - `idle` — no activity for more than 45 days
+  - `active` — used within the last 45 days
+- `wastedSoFar = wastedDays × dailyCost`, where `dailyCost = costMonthly × 12 / 365`.
+  `wastedDays` = days since last activity (`idle`) or days since it was assigned (`never`).
+- Per-user and global totals are just roll-ups (sums) of these per-assignment values.
+
+### What "activity" means per connector
+
+| Connector | `lastActivity` source | Granularity |
+|-----------|----------------------|-------------|
+| **GitHub** | `last_activity_at` from the Copilot billing API | **Per seat** (exact) |
+| **Microsoft 365** | The user's last **sign-in** (`signInActivity`, with a raw sign-in-log fallback by `userId`) | **Per user**, applied to all of that user's licenses |
+
+> **Note on Microsoft 365 accuracy:** M365 activity is measured at the **user
+> sign-in level**, not per individual service. A single sign-in marks *all* of that
+> user's M365 licenses (E5, Intune, Teams, etc.) as active with the same date.
+> This means Seatscope can tell you a user is active in the tenant, but **not**
+> whether they actually use the specific features a bundled SKU (like E5) grants.
+> Truly per-service usage would require the Microsoft 365 **usage reports API**
+> (`getOffice365ActiveUserDetail`), which is intentionally not used here to keep
+> the tool simple and its required permissions minimal. Always **review before
+> reclaiming a license** — the dashboard flags candidates, it does not confirm
+> that a seat is safe to remove.
+
 ## Live connectors (implemented)
 
 Set `DATA_SOURCE=live`. Every connector with credentials in `.env` runs and is merged.
