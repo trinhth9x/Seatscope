@@ -77,7 +77,7 @@ function renderOverview() {
       <div class="kpi">
         <div class="label">Monthly spend</div>
         <div class="value">${money(k.totalMonthlySpend)}</div>
-        <div class="sub muted">${k.totalSeats} seats · ${k.totalPeople} people</div>
+        <div class="sub muted">${k.paidPurchasedSeats} purchased paid licenses</div>
       </div>
       <div class="kpi accent-red">
         <div class="label">Wasted / month</div>
@@ -154,7 +154,7 @@ function renderUsers() {
   const sort = { key: "wasted", dir: -1 };
 
   $("#content").innerHTML = `
-    <p class="section-hint small">${allUsers.length} users hold licenses totalling <b>${money2(totalCost)}/mo</b>. Click a row to see each user's licenses. Click a column header to sort.</p>
+    <p class="section-hint small">${allUsers.length} users hold licenses totalling <b>${money2(totalCost)}/mo</b>. Users are merged only when the email address matches <b>exactly</b>; otherwise records stay separate. Click a row to see each user's licenses. Click a column header to sort.</p>
     <div class="panel">
       <div style="margin-bottom:12px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap">
         <input id="userSearch" placeholder="Search by name or email…" style="width:280px;padding:8px 12px;border:1px solid var(--border,#2a2f3a);border-radius:8px;background:transparent;color:inherit">
@@ -468,6 +468,17 @@ async function renderLicenses() {
   const data = await res.json();
   if (data.error) { $("#content").innerHTML = `<div class="loading">Error: ${data.error}</div>`; return; }
   const rows = data.licenses;
+  const purchasedSeats = (l) => l.seatsPurchased ?? l.seatsTotal ?? l.billableSeats ?? l.seatsAssigned;
+  const assignedSeats = (l) => l.seatsAssigned ?? 0;
+  const availableSeats = (l) => l.seatsAvailable ?? Math.max(purchasedSeats(l) - assignedSeats(l), 0);
+  const billableSeats = (l) => l.billableSeats ?? purchasedSeats(l);
+  const formatDate = (v) => v ? new Date(v).toLocaleDateString() : "—";
+  const statusPill = (status) => {
+    if (!status) return `<span class="pill na">N/A</span>`;
+    const s = String(status || "").toLowerCase();
+    const cls = s === "active" ? "active" : s === "warning" ? "idle" : s === "disabled" ? "never" : "na";
+    return `<span class="pill ${cls}">${escapeAttr(status)}</span>`;
+  };
   const manualById = {};
   try { (await mres.json()).manual.forEach((m) => (manualById[m.id] = m)); } catch {}
 
@@ -487,7 +498,7 @@ async function renderLicenses() {
       <span class="muted small" id="addMsg"></span>
     </div>
 
-    <p class="section-hint small">Click <b>Edit</b> on any license to change its details. For <b>fetched</b> licenses you can edit the name & price; <b>manual</b> licenses are fully editable. Click a column header to sort.</p>
+    <p class="section-hint small">Click <b>Edit</b> on any license to change its details. For <b>fetched</b> licenses you can edit the name & price; <b>manual</b> licenses are fully editable. Monthly cost is now calculated from <b>purchased quantity</b> when the connector provides it, because that is what billing typically follows. Click a column header to sort.</p>
     <div class="panel">
       <div id="licTableMount"></div>
       <div style="margin-top:14px;display:flex;gap:10px;align-items:center">
@@ -523,10 +534,14 @@ async function renderLicenses() {
   const licCols = [
     { key: "name", label: "License type", get: (l) => l.name },
     { key: "service", label: "Service", get: (l) => l.service },
-    { key: "seats", label: "Seats", num: true, get: (l) => l.seatsAssigned },
+    { key: "status", label: "Status", get: (l) => l.status || "" },
+    { key: "purchased", label: "Purchased", num: true, get: (l) => billableSeats(l) },
+    { key: "assigned", label: "Assigned", num: true, get: (l) => assignedSeats(l) },
+    { key: "available", label: "Available", num: true, get: (l) => availableSeats(l) },
+    { key: "renewal", label: "Renewal / expiration", get: (l) => l.renewalDate || "" },
     { key: "default", label: "Fetched default", num: true, get: (l) => l.defaultPrice },
     { key: "price", label: "Price / license ($/mo)", num: true, get: (l) => l.price },
-    { key: "monthly", label: "Monthly cost", num: true, get: (l) => l.price * l.seatsAssigned },
+    { key: "monthly", label: "Monthly cost", num: true, get: (l) => l.price * billableSeats(l) },
     { key: "__actions", label: "", num: true, sortable: false, get: () => 0 },
   ];
   const licSort = { key: "monthly", dir: -1 };
@@ -535,7 +550,8 @@ async function renderLicenses() {
     if (!rows.length) { $("#licTableMount").innerHTML = `<p class="muted">No licenses found.</p>`; return; }
     const sorted = sortRows(rows, licCols, licSort);
     $("#licTableMount").innerHTML = `
-      <table>
+      <div class="table-scroll">
+      <table class="license-table">
         <thead><tr>${sortHeaders(licCols, licSort)}</tr></thead>
         <tbody>
           ${sorted.map((l) => `
@@ -545,10 +561,14 @@ async function renderLicenses() {
                 ${l.manual ? `<span class="pill idle">manual</span>` : ""} ${l.overridden ? `<span class="pill active">edited</span>` : ""}
               </td>
               <td>${escapeAttr(l.service)}</td>
-              <td class="num">${l.seatsAssigned}</td>
+              <td>${statusPill(l.status)}</td>
+              <td class="num">${billableSeats(l)}</td>
+              <td class="num">${assignedSeats(l)}</td>
+              <td class="num">${availableSeats(l)}</td>
+              <td>${formatDate(l.renewalDate)}</td>
               <td class="num muted">${money2(l.defaultPrice)}</td>
               <td class="num">${money2(l.price)}</td>
-              <td class="num">${money2(l.price * l.seatsAssigned)}</td>
+              <td class="num">${money2(l.price * billableSeats(l))}</td>
               <td class="num">
                 <div class="row-actions">
                   <button class="btn edit-lic" data-sku="${encodeURIComponent(l.skuId)}" style="padding:5px 11px">Edit</button>
@@ -557,7 +577,8 @@ async function renderLicenses() {
               </td>
             </tr>`).join("")}
         </tbody>
-      </table>`;
+      </table>
+      </div>`;
 
     $("#licTableMount").querySelectorAll(".del-manual").forEach((btn) => {
       btn.addEventListener("click", async () => {
@@ -606,8 +627,16 @@ async function renderLicenses() {
           <span class="fld-note">Fetched default: ${money2(lic.defaultPrice)}</span></label>
         <label class="fld">Service<input value="${escapeAttr(lic.service)}" disabled>
           <span class="fld-note">From connector — read-only</span></label>
-        <label class="fld">Seats<input value="${lic.seatsAssigned}" disabled>
-          <span class="fld-note">From connector — read-only</span></label>`;
+        <label class="fld">Purchased quantity<input value="${billableSeats(lic)}" disabled>
+          <span class="fld-note">Used for monthly spend when the connector provides purchased quantity.</span></label>
+        <label class="fld">Assigned quantity<input value="${assignedSeats(lic)}" disabled>
+          <span class="fld-note">Current user assignments from the connector.</span></label>
+        <label class="fld">Available quantity<input value="${availableSeats(lic)}" disabled>
+          <span class="fld-note">Purchased minus assigned.</span></label>
+        <label class="fld">Status<input value="${escapeAttr(lic.status || "N/A")}" disabled>
+          <span class="fld-note">Subscription state from the connector.</span></label>
+        <label class="fld">Renewal / expiration<input value="${escapeAttr(formatDate(lic.renewalDate))}" disabled>
+          <span class="fld-note">Best available lifecycle date from the connector.</span></label>`;
 
     $("#modalMount").innerHTML = `
       <div class="modal-overlay" id="modalOverlay">
@@ -706,10 +735,14 @@ async function renderLicenses() {
     const out = rows.map((l) => ({
       "License type": l.name,
       Service: l.service,
-      Seats: l.seatsAssigned,
+      Status: l.status || "",
+      "Purchased quantity": billableSeats(l),
+      "Assigned quantity": assignedSeats(l),
+      "Available quantity": availableSeats(l),
+      "Renewal / expiration": l.renewalDate || "",
       "Fetched default (USD)": l.defaultPrice,
       "Price/license (USD)": l.price,
-      "Monthly cost (USD)": Math.round(l.price * l.seatsAssigned * 100) / 100,
+      "Monthly cost (USD)": Math.round(l.price * billableSeats(l) * 100) / 100,
       Manual: l.manual ? "yes" : "no",
       Edited: l.overridden ? "yes" : "no",
     }));

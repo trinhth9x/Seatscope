@@ -37,6 +37,10 @@ const SKU = {
   CPC_E_2C_4GB_128GB: { name: "Windows 365 Enterprise 2vCPU/4GB", price: 41 },
 };
 
+function humanizeSkuName(name) {
+  return String(name || "").replace(/_/g, " ").trim();
+}
+
 // most recent of several ISO datetime strings (ignoring null/undefined)
 function maxDate(...vals) {
   let best = null;
@@ -45,6 +49,20 @@ function maxDate(...vals) {
     if (!best || new Date(v).getTime() > new Date(best).getTime()) best = v;
   }
   return best;
+}
+
+function sumUnits(units = {}) {
+  return [units.enabled, units.warning, units.suspended, units.lockedOut]
+    .reduce((sum, n) => sum + Math.max(0, Number(n) || 0), 0);
+}
+
+function subscriptionStatus(statuses = new Set(), fallback = null) {
+  if (statuses.has("Enabled") || statuses.has("Warning")) return "Active";
+  if (statuses.has("Suspended") || statuses.has("LockedOut")) return "Disabled";
+  if (statuses.has("Deleted")) return "Deleted";
+  if (fallback === "Enabled" || fallback === "Warning") return "Active";
+  if (fallback === "Suspended" || fallback === "LockedOut") return "Disabled";
+  return fallback;
 }
 
 async function token(cfg) {
@@ -117,15 +135,32 @@ export async function collect(cfg = {}) {
   const skuBySkuId = {};
 
   const subs = await graphAll("/subscribedSkus", tok);
+  let dirSubs = [];
+  try {
+    dirSubs = await graphAll("/directory/subscriptions", tok);
+  } catch (e) {
+    console.warn(`  [m365] directory subscriptions unavailable, renewal metadata skipped: ${e.message.slice(0, 120)}`);
+  }
+  const dirMetaBySkuId = {};
+  for (const s of dirSubs) {
+    const meta = (dirMetaBySkuId[s.skuId] ??= { totalLicenses: 0, statuses: new Set(), nextLifecycleDateTime: null });
+    meta.totalLicenses += Math.max(0, Number(s.totalLicenses) || 0);
+    if (s.status) meta.statuses.add(s.status);
+    if (s.nextLifecycleDateTime && (!meta.nextLifecycleDateTime || s.nextLifecycleDateTime > meta.nextLifecycleDateTime)) {
+      meta.nextLifecycleDateTime = s.nextLifecycleDateTime;
+    }
+  }
   for (const s of subs) {
-    const meta = SKU[s.skuPartNumber] || { name: s.skuPartNumber, price: 0 };
+    const subMeta = dirMetaBySkuId[s.skuId];
+    const productMeta = SKU[s.skuPartNumber] || { name: humanizeSkuName(s.skuPartNumber), price: 0 };
     const sku = {
       id: s.skuId,
       serviceId: "m365",
-      name: meta.name,
-      unitCostMonthly: meta.price,
-      seatsTotal: s.prepaidUnits?.enabled ?? null,
-      renewalDate: null,
+      name: productMeta.name,
+      unitCostMonthly: productMeta.price,
+      seatsTotal: subMeta?.totalLicenses || sumUnits(s.prepaidUnits) || null,
+      renewalDate: subMeta?.nextLifecycleDateTime ? subMeta.nextLifecycleDateTime.slice(0, 10) : null,
+      status: subscriptionStatus(subMeta?.statuses, s.capabilityStatus),
     };
     skus.push(sku);
     skuBySkuId[s.skuId] = sku;

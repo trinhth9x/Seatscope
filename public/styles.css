@@ -92,6 +92,9 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .pill.never { background: #fde8e8; color: #b91c1c; }
 .pill.idle { background: #fef3e2; color: #b45309; }
 .pill.active { background: #e7f8f1; color: #067a55; }
+.pill.na { background: #eef2f7; color: #64748b; }
+.table-scroll { overflow-x: auto; }
+.license-table { min-width: 1280px; }
 .avatar { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--brand-soft); color: var(--brand); font-weight: 700; font-size: 11px; margin-right: 9px; }
 .person { display: flex; align-items: center; }
 .loading { padding: 60px; text-align: center; color: var(--muted); }

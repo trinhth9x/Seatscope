@@ -9,11 +9,18 @@ function daysBetween(dateStr) {
   return Math.floor((Date.now() - then) / 86400000);
 }
 
+function reportingPersonKey(row) {
+  return row.synthetic || !row.email ? `id:${row.personId}` : `email:${row.email}`;
+}
+
 export function buildDashboard(raw) {
   const { services, skus, people, assignments } = raw;
   const skuById = Object.fromEntries(skus.map((s) => [s.id, s]));
   const svcById = Object.fromEntries(services.map((s) => [s.id, s]));
   const personById = Object.fromEntries(people.map((p) => [p.id, p]));
+  const assignedSeatsBySku = {};
+  for (const a of assignments) assignedSeatsBySku[a.skuId] = (assignedSeatsBySku[a.skuId] || 0) + 1;
+  const billableSeatsOf = (sku) => sku.seatsTotal ?? assignedSeatsBySku[sku.id] ?? 0;
 
   const dailyCost = (monthly) => (monthly * 12) / 365; // avg days/month
 
@@ -61,16 +68,26 @@ export function buildDashboard(raw) {
     };
   }).filter(Boolean);
 
-  const totalMonthlySpend = rows.reduce((s, r) => s + r.costMonthly, 0);
+  const totalMonthlySpend = skus.reduce((sum, sku) => sum + sku.unitCostMonthly * billableSeatsOf(sku), 0);
+  const totalBillableSeats = skus.reduce((sum, sku) => sum + billableSeatsOf(sku), 0);
+  const paidPurchasedSeats = skus.reduce(
+    (sum, sku) => sum + (sku.unitCostMonthly > 0 ? billableSeatsOf(sku) : 0),
+    0,
+  );
   const wastedRows = rows.filter((r) => r.wasted);
   const wastedMonthlySpend = wastedRows.reduce((s, r) => s + r.costMonthly, 0);
 
   // spend + waste grouped by service
   const byService = {};
+  for (const sku of skus) {
+    const svc = svcById[sku.serviceId];
+    if (!svc) continue;
+    byService[svc.name] ??= { service: svc.name, spend: 0, waste: 0, seats: 0, wastedSeats: 0 };
+    byService[svc.name].spend += sku.unitCostMonthly * billableSeatsOf(sku);
+    byService[svc.name].seats += billableSeatsOf(sku);
+  }
   for (const r of rows) {
     byService[r.service] ??= { service: r.service, spend: 0, waste: 0, seats: 0, wastedSeats: 0 };
-    byService[r.service].spend += r.costMonthly;
-    byService[r.service].seats += 1;
     if (r.wasted) {
       byService[r.service].waste += r.costMonthly;
       byService[r.service].wastedSeats += 1;
@@ -83,20 +100,25 @@ export function buildDashboard(raw) {
   const perPerson = {};
   for (const r of rows) {
     if (r.synthetic) continue; // manual-license seat-holders aren't real users
-    const p = (perPerson[r.personId] ??= {
+    const key = reportingPersonKey(r);
+    const p = (perPerson[key] ??= {
       personId: r.personId,
       name: r.personName,
       email: r.email,
       dept: r.department,
-      tenant: r.tenant,
+      tenants: new Set(),
       anyActive: false,
       lastActivity: null, // most recent activity date across their licenses
       licenses: 0,
       services: new Set(),
       wastedMonthly: 0,
     });
+    if (!p.name && r.personName) p.name = r.personName;
+    if (!p.email && r.email) p.email = r.email;
+    if (!p.dept && r.department) p.dept = r.department;
     p.licenses += 1;
     if (r.service) p.services.add(r.service);
+    if (r.tenant) p.tenants.add(r.tenant);
     if (r.status === "active") p.anyActive = true;
     if (r.wasted) p.wastedMonthly += r.costMonthly;
     if (r.lastActivity && (!p.lastActivity || r.lastActivity > p.lastActivity)) p.lastActivity = r.lastActivity;
@@ -107,6 +129,7 @@ export function buildDashboard(raw) {
     .map((p) => ({
       ...p,
       services: [...p.services].sort(),
+      tenant: [...p.tenants].sort().join(", "),
       daysSinceLastLogin: p.lastActivity ? daysBetween(p.lastActivity) : null, // null => never logged in
       wastedMonthly: round(p.wastedMonthly),
     }))
@@ -117,20 +140,25 @@ export function buildDashboard(raw) {
   const userMap = {};
   for (const r of rows) {
     if (r.synthetic) continue; // manual-license seat-holders aren't real users
-    const u = (userMap[r.personId] ??= {
+    const key = reportingPersonKey(r);
+    const u = (userMap[key] ??= {
       personId: r.personId,
       name: r.personName,
       email: r.email,
       dept: r.department,
-      tenant: r.tenant,
+      tenants: new Set(),
       licenseCount: 0,
       monthlyCost: 0,
       wastedMonthly: 0,
       lastActivity: null,
       licenses: [],
     });
+    if (!u.name && r.personName) u.name = r.personName;
+    if (!u.email && r.email) u.email = r.email;
+    if (!u.dept && r.department) u.dept = r.department;
     u.licenseCount += 1;
     u.monthlyCost += r.costMonthly;
+    if (r.tenant) u.tenants.add(r.tenant);
     if (r.wasted) u.wastedMonthly += r.costMonthly;
     if (r.lastActivity && (!u.lastActivity || r.lastActivity > u.lastActivity)) u.lastActivity = r.lastActivity;
     u.licenses.push({ service: r.service, sku: r.sku, costMonthly: r.costMonthly, status: r.status });
@@ -139,6 +167,7 @@ export function buildDashboard(raw) {
     .map((u) => ({
       ...u,
       services: [...new Set(u.licenses.map((l) => l.service).filter(Boolean))].sort(),
+      tenant: [...u.tenants].sort().join(", "),
       monthlyCost: round(u.monthlyCost),
       wastedMonthly: round(u.wastedMonthly),
     }))
@@ -160,10 +189,13 @@ export function buildDashboard(raw) {
       wastedMonthlySpend: round(wastedMonthlySpend),
       potentialAnnualSavings: round(wastedMonthlySpend * 12),
       wastedSoFarTotal: round(wastedSoFarTotal),
-      wastePct: round((wastedMonthlySpend / totalMonthlySpend) * 100),
-      totalPeople: people.length,
+      wastePct: totalMonthlySpend ? round((wastedMonthlySpend / totalMonthlySpend) * 100) : 0,
+      totalPeople: userLicenses.length,
       inactivePeople: inactivePeople.length,
-      totalSeats: rows.length,
+      totalSeats: totalBillableSeats,
+      paidPurchasedSeats,
+      assignedSeats: rows.length,
+      availableSeats: Math.max(totalBillableSeats - rows.length, 0),
       wastedSeats: wastedRows.length,
     },
     spendByService,

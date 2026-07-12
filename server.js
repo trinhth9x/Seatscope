@@ -265,20 +265,28 @@ app.get("/api/licenses", async (_req, res) => {
     for (const a of raw.assignments) seatsHeld[a.skuId] = (seatsHeld[a.skuId] || 0) + 1;
     const licenses = raw.skus.map((s) => {
       const o = ovOf(overrides[s.id]);
+      const seatsAssigned = seatsHeld[s.id] || 0;
+      const seatsPurchased = s.seatsTotal ?? null;
+      const billableSeats = seatsPurchased ?? seatsAssigned;
       return {
         skuId: s.id,
         service: svc[s.serviceId] || s.serviceId,
         name: o.name || s.name, // effective (edited) name
         defaultName: s.name, // fetched name
-        seatsTotal: s.seatsTotal ?? null,
-        seatsAssigned: seatsHeld[s.id] || 0,
+        seatsTotal: seatsPurchased,
+        seatsPurchased,
+        seatsAssigned,
+        seatsAvailable: seatsPurchased != null ? Math.max(seatsPurchased - seatsAssigned, 0) : null,
+        billableSeats,
+        status: s.status || null,
+        renewalDate: s.renewalDate || null,
         defaultPrice: s.unitCostMonthly,
         price: o.price != null && o.price !== "" ? Number(o.price) : s.unitCostMonthly,
         overridden: o.price != null || !!o.name,
         manual: !!s.manual,
       };
     });
-    licenses.sort((a, b) => b.price * b.seatsAssigned - a.price * a.seatsAssigned); // highest monthly cost first
+    licenses.sort((a, b) => b.price * b.billableSeats - a.price * a.billableSeats); // highest monthly cost first
     res.json({ licenses });
   } catch (e) {
     res.status(500).json({ error: String(e.message || e) });
