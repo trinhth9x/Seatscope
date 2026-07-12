@@ -18,8 +18,9 @@ body {
   background: var(--bg);
   color: var(--ink);
   font-size: 14px;
+  overflow: hidden;
 }
-.app { display: flex; min-height: 100vh; }
+.app { display: flex; height: 100vh; }
 .muted { color: var(--muted); }
 .small { font-size: 12px; }
 
@@ -29,6 +30,8 @@ body {
   background: #0f1629; color: #cdd5e6;
   display: flex; flex-direction: column;
   padding: 20px 14px;
+  height: 100vh;
+  overflow-y: auto;
 }
 .brand { display: flex; align-items: center; gap: 10px; padding: 6px 8px 22px; }
 .brand-mark { width: 30px; height: 30px; border-radius: 8px; background: var(--brand); color: #fff; display: grid; place-items: center; font-size: 15px; }
@@ -51,7 +54,7 @@ body {
 }
 
 /* Main */
-.main { flex: 1; padding: 26px 30px; overflow-x: hidden; }
+.main { flex: 1; padding: 26px 30px; overflow-x: hidden; overflow-y: auto; height: 100vh; }
 .topbar { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 22px; }
 .topbar h1 { margin: 0 0 3px; font-size: 22px; }
 .btn {
@@ -126,4 +129,11 @@ input.price-input:focus { outline: none; border-color: var(--brand); }
 .license-cost-value { min-width: 96px; font-variant-numeric: tabular-nums; font-weight: 700; }
 .license-actions-cell { width: 1%; white-space: nowrap; }
 .row-actions { display: flex; gap: 6px; justify-content: flex-end; }
-@media (max-width: 1000px) { .kpi-grid { grid-template-columns: repeat(2,1fr); } .grid-2 { grid-template-columns: 1fr; } }
+@media (max-width: 1000px) {
+  body { overflow: auto; }
+  .app { height: auto; min-height: 100vh; }
+  .sidebar { height: auto; overflow-y: visible; }
+  .main { height: auto; overflow-y: visible; }
+  .kpi-grid { grid-template-columns: repeat(2,1fr); }
+  .grid-2 { grid-template-columns: 1fr; }
+}
