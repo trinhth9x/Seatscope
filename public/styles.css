@@ -48,17 +48,17 @@ body {
   display: inline-grid; place-items: center;
   text-align: center; opacity: .95;
   border-radius: 7px;
-  font-size: 13px;
-  color: var(--ic-color, #8fa0ff);
-  background: var(--ic-bg, rgba(143, 160, 255, .14));
+  color: #8fa0ff;
+  background: rgba(143, 160, 255, .14);
 }
-.nav-item[data-section="overview"] { --ic-color: #7aa2ff; --ic-bg: rgba(122, 162, 255, .15); }
-.nav-item[data-section="users"] { --ic-color: #34d399; --ic-bg: rgba(52, 211, 153, .14); }
-.nav-item[data-section="waste"] { --ic-color: #f59e0b; --ic-bg: rgba(245, 158, 11, .16); }
-.nav-item[data-section="inactive"] { --ic-color: #f97316; --ic-bg: rgba(249, 115, 22, .14); }
-.nav-item[data-section="renewals"] { --ic-color: #38bdf8; --ic-bg: rgba(56, 189, 248, .14); }
-.nav-item[data-section="licenses"] { --ic-color: #f87171; --ic-bg: rgba(248, 113, 113, .14); }
-.nav-item[data-section="connectors"] { --ic-color: #c084fc; --ic-bg: rgba(192, 132, 252, .14); }
+.nav-item .ic svg {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
 .nav-item:hover { background: #17203a; color: #fff; }
 .nav-item.active { background: var(--brand); color: #fff; }
 .nav-item:hover .ic,
