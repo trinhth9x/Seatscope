@@ -26,6 +26,76 @@ const excelToolbar = (btnId) =>
      <button class="btn" id="${btnId}">⬇ Excel</button>
    </div>`;
 
+function customSelectMarkup(id, options, value, width = "100%") {
+  const active = options.find((o) => o.value === value) || options[0];
+  return `
+    <div class="custom-select" data-select-id="${id}" style="width:${width}">
+      <input type="hidden" id="${id}" value="${escapeAttr(active?.value ?? "")}">
+      <button type="button" class="custom-select-trigger" aria-haspopup="listbox" aria-expanded="false">
+        <span class="custom-select-label">${escapeAttr(active?.label ?? "")}</span>
+      </button>
+      <div class="custom-select-menu" role="listbox">
+        ${options.map((o) => `
+          <button type="button" class="custom-select-option ${o.value === active?.value ? "active" : ""}" role="option" data-value="${escapeAttr(o.value)}">
+            ${escapeAttr(o.label)}
+          </button>`).join("")}
+      </div>
+    </div>`;
+}
+
+function wireCustomSelects(root = document) {
+  root.querySelectorAll(".custom-select").forEach((wrap) => {
+    const trigger = wrap.querySelector(".custom-select-trigger");
+    const label = wrap.querySelector(".custom-select-label");
+    const hidden = wrap.querySelector("input[type='hidden']");
+    const menu = wrap.querySelector(".custom-select-menu");
+    const options = [...wrap.querySelectorAll(".custom-select-option")];
+    if (!trigger || !label || !hidden || !menu || !options.length) return;
+
+    const close = () => {
+      wrap.classList.remove("open");
+      trigger.setAttribute("aria-expanded", "false");
+    };
+    const open = () => {
+      document.querySelectorAll(".custom-select.open").forEach((el) => {
+        if (el !== wrap) {
+          el.classList.remove("open");
+          el.querySelector(".custom-select-trigger")?.setAttribute("aria-expanded", "false");
+        }
+      });
+      wrap.classList.add("open");
+      trigger.setAttribute("aria-expanded", "true");
+    };
+
+    trigger.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (wrap.classList.contains("open")) close();
+      else open();
+    });
+
+    options.forEach((opt) => {
+      opt.addEventListener("click", () => {
+        hidden.value = opt.dataset.value || "";
+        label.textContent = opt.textContent || "";
+        options.forEach((o) => o.classList.toggle("active", o === opt));
+        close();
+      });
+    });
+  });
+
+  if (!window.__customSelectOutsideBound) {
+    document.addEventListener("click", (e) => {
+      document.querySelectorAll(".custom-select.open").forEach((wrap) => {
+        if (!wrap.contains(e.target)) {
+          wrap.classList.remove("open");
+          wrap.querySelector(".custom-select-trigger")?.setAttribute("aria-expanded", "false");
+        }
+      });
+    });
+    window.__customSelectOutsideBound = true;
+  }
+}
+
 const PAGE = {
   overview: { title: "Overview", sub: "License usage, cost & waste across all connected services" },
   users: { title: "Users", sub: "Every user with the licenses they hold and their total monthly license cost" },
@@ -812,11 +882,11 @@ async function renderConnectors() {
       <h3>Data source</h3>
       <p class="section-hint small" style="margin-top:0">Switch to <b>Live</b> to pull real usage from your connectors. <b>Mock</b> shows sample data.</p>
       <div style="display:flex;gap:12px;align-items:flex-end">
-        <label class="fld" style="max-width:220px">Mode
-          <select id="cSource" style="padding:9px 11px;border:1px solid var(--line);border-radius:8px">
-            <option value="mock" ${live ? "" : "selected"}>Mock (sample data)</option>
-            <option value="live" ${live ? "selected" : ""}>Live connectors</option>
-          </select>
+        <label class="fld" style="width:260px;max-width:100%">Mode
+          ${customSelectMarkup("cSource", [
+            { value: "mock", label: "Mock (sample data)" },
+            { value: "live", label: "Live connectors" },
+          ], live ? "live" : "mock", "260px")}
         </label>
         <button class="btn primary" id="saveSource">Save</button>
         <span class="muted small" id="sourceMsg"></span>
@@ -827,10 +897,8 @@ async function renderConnectors() {
       <h3>Add a connector</h3>
       <p class="section-hint small" style="margin-top:0">Pick a supported service. You can add several of the same type (e.g. two GitHub orgs or two M365 tenants).</p>
       <div style="display:flex;gap:12px;align-items:flex-end">
-        <label class="fld" style="max-width:280px">Connector
-          <select id="addConnSel" style="padding:9px 11px;border:1px solid var(--line);border-radius:8px">
-            ${(c.catalog || []).map((x) => `<option value="${x.id}">${x.label}</option>`).join("")}
-          </select>
+        <label class="fld" style="width:340px;max-width:100%">Connector
+          ${customSelectMarkup("addConnSel", (c.catalog || []).map((x) => ({ value: x.id, label: x.label })), c.catalog?.[0]?.id || "", "340px")}
         </label>
         <button class="btn primary" id="addConnBtn">+ Add connector</button>
       </div>
@@ -839,6 +907,8 @@ async function renderConnectors() {
     <h3 style="margin:18px 2px 12px">Your connectors ${instances.length ? `<span class="muted small">(${instances.length})</span>` : ""}</h3>
     ${instances.map((inst) => connInstancePanel(inst, catById[inst.type] || { label: inst.type, fields: [] })).join("")}
     ${instances.length === 0 ? `<p class="muted small">No connectors yet — add one above.</p>` : ""}`;
+
+  wireCustomSelects($("#content"));
 
   // data source
   $("#saveSource").addEventListener("click", async () => {

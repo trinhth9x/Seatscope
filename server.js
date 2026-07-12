@@ -42,7 +42,7 @@ const CONNECTOR_CATALOG = [
     required: ["org", "token"],
   },
   {
-    id: "m365", label: "Microsoft 365 / Entra",
+    id: "m365", label: "Microsoft 365 / Entra ID",
     fields: [
       { key: "tenantId", label: "Tenant ID", type: "text", placeholder: "00000000-0000-…" },
       { key: "clientId", label: "Client ID", type: "text", placeholder: "app registration id" },
