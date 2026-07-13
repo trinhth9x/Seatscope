@@ -912,10 +912,19 @@ async function renderConnectors() {
 
   // data source
   $("#saveSource").addEventListener("click", async () => {
+    if ($("#cSource").value === "live" && !instances.some((inst) => inst.configured)) {
+      $("#sourceMsg").textContent = "Add and save at least one connector before switching to Live.";
+      return;
+    }
     $("#sourceMsg").textContent = "Saving…";
-    await fetch("/api/connectors/source", {
+    const r = await fetch("/api/connectors/source", {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ source: $("#cSource").value }),
     });
+    const j = await r.json();
+    if (!j.ok) {
+      $("#sourceMsg").textContent = "Error: " + j.error;
+      return;
+    }
     $("#sourceMsg").textContent = "Saved. Re-fetching…";
     await load();
     render("connectors");

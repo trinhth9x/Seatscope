@@ -75,11 +75,13 @@ const CATALOG_BY_ID = Object.fromEntries(CONNECTOR_CATALOG.map((c) => [c.id, c])
 const secretKeys = (type) => (CATALOG_BY_ID[type]?.fields || []).filter((f) => f.type === "secret").map((f) => f.key);
 
 function loadConnectors() {
-  try { return JSON.parse(fs.readFileSync(CONNECTORS_FILE, "utf8")); } catch { return {}; }
+  try { return normalizeConnectorState(JSON.parse(fs.readFileSync(CONNECTORS_FILE, "utf8"))); } catch { return {}; }
 }
 function saveConnectors(cfg) {
+  const normalized = normalizeConnectorState(cfg);
   fs.mkdirSync(path.dirname(CONNECTORS_FILE), { recursive: true });
-  fs.writeFileSync(CONNECTORS_FILE, JSON.stringify(cfg, null, 2));
+  fs.writeFileSync(CONNECTORS_FILE, JSON.stringify(normalized, null, 2));
+  return normalized;
 }
 
 // First run: turn any credentials found in .env (or a legacy flat config) into
@@ -137,12 +139,22 @@ function seedFromEnv() {
 })();
 
 function getInstances() {
-  const cfg = loadConnectors();
-  return Array.isArray(cfg.instances) ? cfg.instances : [];
+  return getInstancesFrom(loadConnectors());
+}
+function getInstancesFrom(cfg, { configuredOnly = false } = {}) {
+  const instances = Array.isArray(cfg?.instances) ? cfg.instances : [];
+  return configuredOnly ? instances.filter(connectorConfigured) : instances;
 }
 function connectorConfigured(inst) {
   const req = CATALOG_BY_ID[inst.type]?.required || [];
   return req.every((k) => String(inst.config?.[k] ?? "").trim() !== "");
+}
+function normalizeConnectorState(cfg) {
+  if (!cfg || typeof cfg !== "object") return {};
+  if (cfg.dataSource === "live" && getInstancesFrom(cfg, { configuredOnly: true }).length === 0) {
+    return { ...cfg, dataSource: "mock" };
+  }
+  return cfg;
 }
 // strip secret values before sending an instance to the browser
 function maskInstance(inst) {
@@ -157,7 +169,13 @@ function maskInstance(inst) {
   return { id: inst.id, type: inst.type, name: inst.name || "", config, secretSet, configured: connectorConfigured(inst) };
 }
 
-const currentSource = () => (loadConnectors().dataSource === "live" || (!loadConnectors().dataSource && process.env.DATA_SOURCE === "live") ? "live" : "mock");
+const currentSource = () => {
+  const cfg = loadConnectors();
+  const hasConfiguredConnectors = getInstancesFrom(cfg, { configuredOnly: true }).length > 0;
+  return cfg.dataSource === "live" || (!cfg.dataSource && process.env.DATA_SOURCE === "live" && hasConfiguredConnectors)
+    ? "live"
+    : "mock";
+};
 
 const app = express();
 app.disable("x-powered-by");
@@ -238,7 +256,9 @@ async function getConnectorRaw() {
   if (rawCache) return rawCache;
   const source = currentSource();
   const mod = await import(`./src/connectors/${source}.js`);
-  rawCache = source === "live" ? await mod.collect(getInstances()) : await mod.collect();
+  rawCache = source === "live"
+    ? await mod.collect(getInstancesFrom(loadConnectors(), { configuredOnly: true }))
+    : await mod.collect();
   rawFetchedAt = new Date().toISOString();
   return rawCache;
 }
@@ -427,10 +447,18 @@ app.get("/api/connectors", (_req, res) => {
 app.post("/api/connectors/source", (req, res) => {
   try {
     const cfg = loadConnectors();
-    cfg.dataSource = req.body?.source === "live" ? "live" : "mock";
-    saveConnectors(cfg);
+    const nextSource = req.body?.source === "live" ? "live" : "mock";
+    if (nextSource === "live" && getInstancesFrom(cfg, { configuredOnly: true }).length === 0) {
+      return res.status(400).json({
+        ok: false,
+        error: "Add and save at least one connector before switching to Live.",
+        source: currentSource(),
+      });
+    }
+    cfg.dataSource = nextSource;
+    const saved = saveConnectors(cfg);
     rawCache = null; dashCache = null;
-    res.json({ ok: true, source: currentSource() });
+    res.json({ ok: true, source: saved.dataSource || "mock" });
   } catch (e) {
     res.status(500).json({ error: String(e.message || e) });
   }
