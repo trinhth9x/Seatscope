@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  smoke-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Start server
+        run: npm start > /tmp/seatscope.log 2>&1 &
+
+      - name: Wait for server
+        run: |
+          for i in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:4000/api/dashboard > /tmp/dashboard.json; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Server did not become ready"
+          cat /tmp/seatscope.log
+          exit 1
+
+      - name: Verify dashboard payload
+        run: |
+          node -e "const fs = require('fs'); const data = JSON.parse(fs.readFileSync('/tmp/dashboard.json', 'utf8')); if (!data || typeof data.kpis !== 'object' || !Array.isArray(data.wasteRows) || !Array.isArray(data.inactivePeople) || !Array.isArray(data.userLicenses) || !Array.isArray(data.upcomingRenewals) || !Array.isArray(data.allRows)) { throw new Error('Unexpected dashboard payload shape'); }"

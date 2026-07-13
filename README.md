@@ -4,7 +4,7 @@
 
 Seatscope is an open-source dashboard that shows SaaS license **usage, cost, waste, inactive users, and upcoming renewals** across all connected services — so companies can reclaim seats and save money. Read-only: it never changes your accounts.
 
-> Value story: charge ~$20/mo, save the customer hundreds by reclaiming unused GitHub / Microsoft 365 / Azure DevOps / etc. seats.
+> Value story: help teams spot unused GitHub / Microsoft 365 / Azure DevOps / etc. seats and reclaim spend quickly with a self-hosted, open-source tool.
 
 ## Requirements
 
@@ -192,20 +192,10 @@ Seatscope is **read-only** — it never modifies your accounts. Credentials stay
 your own server: `.env` and everything under `data/` (including `data/connectors.json`,
 which holds connector tokens) are git-ignored and are **never** committed.
 
-### Automated scanning (all free for public repos)
+### Automated scanning
 
-| Scan | What it does | Setup |
-| --- | --- | --- |
-| **SonarCloud** (Automatic Analysis) | Static analysis — code quality + security rules | Import the repo once on SonarCloud (see below) |
-| [`security.yml`](.github/workflows/security.yml) | **CodeQL** SAST · **npm audit** (dependency vulns) · **Gitleaks** (secret scan) | None — uses the built-in `GITHUB_TOKEN` |
-
-The `security.yml` jobs run on every push/PR to `main` and weekly.
-
-**SonarCloud setup** (one-time, free for public repos):
-
-1. Sign in to [SonarCloud](https://sonarcloud.io) with GitHub and **import the repository**.
-2. Leave **Automatic Analysis** enabled (the default) — no token or workflow needed.
-   File/scan tuning lives in [`.sonarcloud.properties`](.sonarcloud.properties).
+Automated scanning is optional. If you want it later, you can add GitHub Actions,
+SonarCloud, or other code/dependency/secret scanning tools that fit your workflow.
 
 ## Support
 
@@ -213,6 +203,11 @@ Seatscope is free and open source. If it helps your team cut wasted license spen
 
 - ⭐ **Star the repo** — it's the biggest help for visibility.
 - 🛠️ **Need commercial support or a custom connector?** [Open an issue](../../issues) to get in touch.
+
+## Contributing
+
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for local setup,
+pull request expectations, and review guidelines.
 
 ## License
 
