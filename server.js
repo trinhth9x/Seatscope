@@ -149,6 +149,10 @@ function connectorConfigured(inst) {
   const req = CATALOG_BY_ID[inst.type]?.required || [];
   return req.every((k) => String(inst.config?.[k] ?? "").trim() !== "");
 }
+function missingConnectorFields(type, config = {}) {
+  const req = CATALOG_BY_ID[type]?.required || [];
+  return req.filter((k) => String(config[k] ?? "").trim() === "");
+}
 function normalizeConnectorState(cfg) {
   if (!cfg || typeof cfg !== "object") return {};
   if (cfg.dataSource === "live" && getInstancesFrom(cfg, { configuredOnly: true }).length === 0) {
@@ -438,7 +442,7 @@ app.get("/api/health", (_req, res) => res.json({ ok: true, source: currentSource
 app.get("/api/connectors", (_req, res) => {
   res.json({
     source: currentSource(),
-    catalog: CONNECTOR_CATALOG.map((c) => ({ id: c.id, label: c.label, fields: c.fields, hint: c.hint || "" })),
+    catalog: CONNECTOR_CATALOG.map((c) => ({ id: c.id, label: c.label, fields: c.fields, hint: c.hint || "", required: c.required || [] })),
     instances: getInstances().map(maskInstance),
   });
 });
@@ -503,6 +507,14 @@ app.put("/api/connectors/instances/:id", (req, res) => {
       if (!validKeys.has(k)) continue;
       if (secrets.has(k) && String(v ?? "").trim() === "") continue; // keep existing secret on blank
       inst.config[k] = typeof v === "string" ? v.trim() : v;
+    }
+    const missing = missingConnectorFields(inst.type, inst.config);
+    if (missing.length) {
+      const labels = Object.fromEntries((CATALOG_BY_ID[inst.type]?.fields || []).map((f) => [f.key, f.label]));
+      return res.status(400).json({
+        ok: false,
+        error: `Missing required fields: ${missing.map((k) => labels[k] || k).join(", ")}`,
+      });
     }
     saveConnectors(cfg);
     rawCache = null; dashCache = null;

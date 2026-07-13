@@ -827,27 +827,47 @@ function connStatusPill(ok) {
 }
 
 // render one config field (input id is scoped by instance id)
-function connField(instId, f, config, secretSet) {
+function connField(instId, f, config, secretSet, required = false) {
   const fid = `f_${instId}_${f.key}`;
+  const label = `${escapeAttr(f.label)}${required ? ` <span class="req-star" title="Required">*</span>` : ""}`;
   if (f.type === "bool") {
     return `<label style="display:flex;gap:8px;align-items:center;font-size:13px;font-weight:600">
-        <input id="${fid}" data-key="${f.key}" data-type="bool" type="checkbox" ${config[f.key] ? "checked" : ""}> ${f.label}
+        <input id="${fid}" data-key="${f.key}" data-type="bool" type="checkbox" ${config[f.key] ? "checked" : ""}> ${label}
       </label>`;
   }
   if (f.type === "secret") {
     const isSet = secretSet?.[f.key];
-    return `<label class="fld">${f.label}<input id="${fid}" data-key="${f.key}" data-type="secret" type="password"
+    return `<label class="fld"> <span class="fld-label">${label}</span><input id="${fid}" data-key="${f.key}" data-type="secret" type="password"
         placeholder="${isSet ? "•••••• (leave blank to keep)" : (f.placeholder || "")}" style="width:260px"></label>`;
   }
   const isNum = f.type === "number";
   const dataType = isNum ? "number" : "text";
   const extra = isNum ? `inputmode="decimal"` : "";
-  return `<label class="fld">${f.label}<input id="${fid}" data-key="${f.key}" data-type="${dataType}" type="text" ${extra}
+  return `<label class="fld"><span class="fld-label">${label}</span><input id="${fid}" data-key="${f.key}" data-type="${dataType}" type="text" ${extra}
       value="${escapeAttr(config[f.key] ?? "")}" placeholder="${escapeAttr(f.placeholder || "")}" style="width:${isNum ? 140 : 260}px"></label>`;
 }
 
+function getConnectorMissingFieldKeys(panel, cat) {
+  return (cat.required || []).filter((key) => {
+    const input = panel.querySelector(`[data-key="${key}"]`);
+    if (!input) return true;
+    if (input.dataset.type === "bool") return false;
+    const value = String(input.value || "").trim();
+    if (input.dataset.type === "secret" && !value) {
+      return input.dataset.secretSet !== "true";
+    }
+    return value === "";
+  });
+}
+
+function getConnectorMissingFields(panel, cat) {
+  const labels = Object.fromEntries((cat.fields || []).map((f) => [f.key, f.label]));
+  return getConnectorMissingFieldKeys(panel, cat).map((key) => labels[key] || key);
+}
+
 function connInstancePanel(inst, cat) {
-  const fields = cat.fields.map((f) => connField(inst.id, f, inst.config || {}, inst.secretSet)).join("");
+  const requiredKeys = new Set(cat.required || []);
+  const fields = cat.fields.map((f) => connField(inst.id, f, inst.config || {}, inst.secretSet, requiredKeys.has(f.key))).join("");
   return `
     <div class="panel" style="margin-bottom:16px" data-inst="${inst.id}" data-type="${inst.type}">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
@@ -864,7 +884,7 @@ function connInstancePanel(inst, cat) {
       ${cat.hint ? `<p class="section-hint small" style="margin-top:8px">${escapeAttr(cat.hint)}</p>` : ""}
       <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;margin-top:8px">${fields}</div>
       <div style="margin-top:14px;display:flex;gap:10px;align-items:center">
-        <button class="btn primary inst-save">Save</button>
+        <button class="btn primary inst-save" disabled>Save</button>
         <span class="muted small inst-msg"></span>
       </div>
     </div>`;
@@ -943,8 +963,31 @@ async function renderConnectors() {
   $("#content").querySelectorAll("[data-inst]").forEach((panel) => {
     const id = panel.dataset.inst;
     const msg = panel.querySelector(".inst-msg");
+    const cat = catById[panel.dataset.type] || { fields: [], required: [] };
+    const saveBtn = panel.querySelector(".inst-save");
 
-    panel.querySelector(".inst-save").addEventListener("click", async () => {
+    panel.querySelectorAll("input[data-type='secret']").forEach((inp) => {
+      inp.dataset.secretSet = instances.find((inst) => inst.id === id)?.secretSet?.[inp.dataset.key] ? "true" : "false";
+    });
+
+    const syncSaveState = () => {
+      const missingKeys = new Set(getConnectorMissingFieldKeys(panel, cat));
+      const missing = getConnectorMissingFields(panel, cat);
+      panel.querySelectorAll("input[data-key]").forEach((inp) => {
+        inp.classList.toggle("is-missing", missingKeys.has(inp.dataset.key));
+      });
+      saveBtn.disabled = missing.length > 0;
+      msg.textContent = missing.length ? `Required: ${missing.join(", ")}` : "";
+    };
+
+    panel.querySelectorAll("input[data-key], .inst-name").forEach((inp) => {
+      inp.addEventListener("input", syncSaveState);
+      inp.addEventListener("change", syncSaveState);
+    });
+
+    syncSaveState();
+
+    saveBtn.addEventListener("click", async () => {
       const config = {};
       panel.querySelectorAll("input[data-key]").forEach((inp) => {
         const key = inp.dataset.key;
@@ -953,6 +996,11 @@ async function renderConnectors() {
         else config[key] = inp.value;
       });
       const name = panel.querySelector(".inst-name").value;
+      const missing = getConnectorMissingFields(panel, cat);
+      if (missing.length) {
+        msg.textContent = `Required: ${missing.join(", ")}`;
+        return;
+      }
       msg.textContent = "Saving…";
       const r = await fetch("/api/connectors/instances/" + encodeURIComponent(id), {
         method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, config }),
