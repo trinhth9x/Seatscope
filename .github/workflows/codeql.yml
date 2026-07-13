@@ -33,6 +33,7 @@ jobs:
         uses: github/codeql-action/init@v3
         with:
           languages: ${{ matrix.language }}
+          dependency-caching: false
 
       - name: Perform CodeQL analysis
         uses: github/codeql-action/analyze@v3
